@@ -3,6 +3,9 @@ param(
     [string]$Region = "us-east-1"
 )
 
+# Canonical schema definition lives in: infra/dynamodb/schema.yaml
+# This script is an executable provisioning helper derived from that definition.
+
 $ErrorActionPreference = "Stop"
 
 function New-TempJsonFile {
