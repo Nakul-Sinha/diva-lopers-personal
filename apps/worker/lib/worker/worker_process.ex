@@ -71,9 +71,9 @@ defmodule Worker.WorkerProcess do
     start_time = System.monotonic_time(:millisecond)
     limits = Map.get(job, :resource_limits, %{})
 
-    with {:ok, _vm_port} <- boot_vm(state.slot_index, state.socket_path, state.vsock_path, limits),
-         :ok <- Worker.VsockChannel.inject(state.vsock_path, job),
-         {:ok, result} <- Worker.VsockChannel.collect(state.vsock_path, timeout_ms(job)) do
+        with {:ok, _vm_port} <- boot_vm(state.slot_index, state.socket_path, state.vsock_path, limits),
+          :ok <- Worker.VsockChannel.inject(state.vsock_path, job),
+          {:ok, result} <- Worker.VsockChannel.collect(state.vsock_path, timeout_ms(job) + 500) do
       wall_time = System.monotonic_time(:millisecond) - start_time
 
       stdout_key = "logs/#{job_id(job)}/stdout"
