@@ -4,6 +4,7 @@ defmodule Worker.FirecrackerVM do
   require Logger
 
   @firecracker_bin Application.compile_env(:worker, :firecracker_bin, "/usr/local/bin/firecracker")
+  @infinity_jailer_bin Application.compile_env(:worker, :infinity_jailer_bin, "/usr/local/bin/infinity-jailer")
   @assets_dir Application.compile_env(:worker, :assets_dir, "/opt/infinity_node/firecracker/assets")
 
   def boot(slot_index, socket_path, vsock_path, limits) do
@@ -46,6 +47,18 @@ defmodule Worker.FirecrackerVM do
 
   defp snapshot_boot_enabled? do
     Application.get_env(:worker, :snapshot_boot_enabled, true)
+  end
+
+  defp use_jailer? do
+    Application.get_env(:worker, :use_jailer, false)
+  end
+
+  defp run_uid do
+    Application.get_env(:worker, :jailer_uid, 1000)
+  end
+
+  defp run_gid do
+    Application.get_env(:worker, :jailer_gid, 1000)
   end
 
   defp boot_from_snapshot(socket_path) do
@@ -99,11 +112,43 @@ defmodule Worker.FirecrackerVM do
 
     File.write!(config_path, Jason.encode!(config))
 
-    with {:ok, port} <- start_firecracker(socket_path, config_path),
+    with {:ok, port} <- start_cold_vm(slot_index, socket_path, config_path, limits),
          :ok <- wait_for_socket(socket_path, 20) do
       {:ok, port}
     else
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp start_cold_vm(slot_index, socket_path, config_path, limits) do
+    if use_jailer?() and File.exists?(@infinity_jailer_bin) do
+      port =
+        Port.open({:spawn_executable, @infinity_jailer_bin}, [
+          :binary,
+          :exit_status,
+          args: [
+            "--firecracker",
+            @firecracker_bin,
+            "--api-sock",
+            socket_path,
+            "--config-file",
+            config_path,
+            "--cgroup-name",
+            "slot-#{slot_index}",
+            "--memory-limit-bytes",
+            Integer.to_string(memory_limit_bytes(limits)),
+            "--cpu-shares",
+            Integer.to_string(cpu_shares(limits)),
+            "--uid",
+            Integer.to_string(run_uid()),
+            "--gid",
+            Integer.to_string(run_gid())
+          ]
+        ])
+
+      {:ok, port}
+    else
+      start_firecracker(socket_path, config_path)
     end
   end
 
@@ -170,7 +215,13 @@ defmodule Worker.FirecrackerVM do
   defp cpu_count(%{"cpu_shares" => shares}) when is_integer(shares) and shares >= 2048, do: 2
   defp cpu_count(_), do: 1
 
+  defp cpu_shares(%{cpu_shares: shares}) when is_integer(shares) and shares > 0, do: shares
+  defp cpu_shares(%{"cpu_shares" => shares}) when is_integer(shares) and shares > 0, do: shares
+  defp cpu_shares(_), do: 1024
+
   defp memory_mb(%{memory_mb: value}) when is_integer(value) and value > 0, do: value
   defp memory_mb(%{"memory_mb" => value}) when is_integer(value) and value > 0, do: value
   defp memory_mb(_), do: 128
+
+  defp memory_limit_bytes(limits), do: memory_mb(limits) * 1_048_576
 end
