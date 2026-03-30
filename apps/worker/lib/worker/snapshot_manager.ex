@@ -55,10 +55,16 @@ defmodule Worker.SnapshotManager do
   end
 
   defp fetch_object(bucket, key) do
-    case ExAws.S3.get_object(bucket, key) |> ExAws.request() do
-      {:ok, %{body: body}} when is_binary(body) -> {:ok, body}
-      {:ok, %{body: body}} -> {:ok, IO.iodata_to_binary(body)}
-      {:error, reason} -> {:error, {:s3_get_failed, key, reason}}
+    try do
+      case ExAws.S3.get_object(bucket, key) |> ExAws.request() do
+        {:ok, %{body: body}} when is_binary(body) -> {:ok, body}
+        {:ok, %{body: body}} -> {:ok, IO.iodata_to_binary(body)}
+        {:error, reason} -> {:error, {:s3_get_failed, key, reason}}
+      end
+    rescue
+      exception -> {:error, {:s3_get_exception, key, Exception.message(exception)}}
+    catch
+      :exit, reason -> {:error, {:s3_get_exit, key, reason}}
     end
   end
 

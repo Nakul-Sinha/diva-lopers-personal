@@ -8,6 +8,8 @@ use anyhow::{Context, Result};
 #[cfg(target_os = "linux")]
 use clap::Parser;
 #[cfg(target_os = "linux")]
+use nix::sched::{unshare, CloneFlags};
+#[cfg(target_os = "linux")]
 use nix::unistd::{setgid, setuid, Gid, Uid};
 #[cfg(target_os = "linux")]
 use std::os::unix::process::CommandExt;
@@ -43,6 +45,10 @@ struct Args {
 
     #[arg(long, default_value = "1000")]
     gid: u32,
+
+    /// Disable private network namespace isolation.
+    #[arg(long, default_value_t = false)]
+    disable_netns: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -53,6 +59,10 @@ fn main() -> Result<()> {
         .context("failed to configure cgroups")?;
 
     cgroups::enter(&args.cgroup_name).context("failed to enter cgroup")?;
+
+    if !args.disable_netns {
+        unshare(CloneFlags::CLONE_NEWNET).context("failed to unshare network namespace")?;
+    }
 
     seccomp::apply_permissive_filter().context("failed to apply seccomp filter")?;
 

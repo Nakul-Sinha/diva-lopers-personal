@@ -9,6 +9,8 @@ ASSETS_DIR="${FC_ASSETS:-${INFINITY_NODE_ROOT}/firecracker/assets}"
 SNAPSHOT_DIR="${ASSETS_DIR}/snapshots"
 FC_SOCKET="/tmp/fc-snapshot.socket"
 FC_CONFIG="/tmp/fc-snapshot-config.json"
+SLOT_INDEX="${SLOT_INDEX:-0}"
+VSOCK_UDS="/tmp/fc-vsock-slot-${SLOT_INDEX}.socket"
 
 mkdir -p "${SNAPSHOT_DIR}"
 rm -f "${FC_SOCKET}"
@@ -30,6 +32,10 @@ cat > "${FC_CONFIG}" <<EOF
   "machine-config": {
     "vcpu_count": 1,
     "mem_size_mib": 128
+  },
+  "vsock": {
+    "guest_cid": 3,
+    "uds_path": "${VSOCK_UDS}"
   }
 }
 EOF
