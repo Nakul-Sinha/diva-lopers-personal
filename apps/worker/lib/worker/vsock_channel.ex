@@ -14,9 +14,12 @@ defmodule Worker.VsockChannel do
 
     with {:ok, artifact_bytes} <- artifact_bytes(job),
          {:ok, payload_bytes} <- payload_bytes(job),
-         {:ok, socket} <- connect(socket_path, timeout_ms),
-         :ok <- :socket.send(socket, encode_inbound(artifact_bytes, payload_bytes)) do
-      :ok
+         {:ok, socket} <- connect(socket_path, timeout_ms) do
+      try do
+        :socket.send(socket, encode_inbound(artifact_bytes, payload_bytes))
+      after
+        :socket.close(socket)
+      end
     else
       {:error, reason} ->
         Logger.warning("vsock inject failed for #{job_id(job)}: #{inspect(reason)}")
@@ -164,11 +167,13 @@ defmodule Worker.VsockChannel do
   end
 
   defp connect(socket_path, timeout_ms) when is_binary(socket_path) do
-    with {:ok, socket} <- :socket.open(:local, :stream, :default),
-         :ok <- :socket.connect(socket, %{family: :local, path: to_charlist(socket_path)}, timeout_ms) do
-      {:ok, socket}
-    else
-      {:error, reason} -> {:error, {:connect_failed, reason}}
+    with {:ok, socket} <- :socket.open(:local, :stream, :default) do
+      case :socket.connect(socket, %{family: :local, path: to_charlist(socket_path)}, timeout_ms) do
+        :ok -> {:ok, socket}
+        {:error, reason} ->
+          :socket.close(socket)
+          {:error, {:connect_failed, reason}}
+      end
     end
   end
 
