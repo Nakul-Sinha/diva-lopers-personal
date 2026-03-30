@@ -63,3 +63,48 @@ Before running this project locally or deploying to production, ensure you have 
 ```bash
 git clone [https://github.com/](https://github.com/)[username]/[repo].git
 cd [repo]
+
+```
+## Architecture
+```
+
+
+```mermaid
+graph TB
+
+A[Developer] -->|POST /invoke| B[Phoenix API Layer]
+
+B -->|Validate Request| C[DynamoDB - Jobs Table]
+B -->|Enqueue Job| D[SQS Queue]
+
+D --> E[SQSConsumer GenServer]
+E --> F[DispatchCoordinator]
+
+F -->|Select Least Loaded Node| G[Worker Node]
+
+subgraph Worker_Node
+    G --> H[WorkerPoolSupervisor]
+    H --> I1[WorkerProcess Slot 1]
+    H --> I2[WorkerProcess Slot 2]
+    H --> I3[WorkerProcess Slot N]
+end
+
+I1 -->|Restore Snapshot| J[Firecracker MicroVM]
+I2 -->|Restore Snapshot| J
+I3 -->|Restore Snapshot| J
+
+J -->|Receive Artifact + Payload via Vsock| K[Execute Function]
+
+K --> L[Stdout / Stderr / Exit Code]
+
+L --> M[WorkerProcess Post-Execution]
+
+M -->|Upload Logs| N[S3 Logs Bucket]
+M -->|Emit Metrics| O[OpenTelemetry]
+M -->|Reset VM Snapshot| P[VM Ready State]
+
+M -->|Update State| C
+
+C -->|State TERMINAL| Q[Phoenix API]
+Q --> R[Return Result to Developer]
+```
