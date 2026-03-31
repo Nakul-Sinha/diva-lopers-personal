@@ -5,7 +5,7 @@ import { immer } from 'zustand/middleware/immer'
 import { appRegistry } from '@/apps/registry'
 import type { AppId, Geometry, TileZone } from '@/types/app'
 import type { WindowInstance, WindowManagerState } from '@/types/window'
-import { getCanvasGeometry, getTileGeometry } from '@/wm/tileGeometry'
+import { getCanvasGeometry } from '@/wm/tileGeometry'
 
 function getDefaultGeometry(appId: AppId, existingCount: number): Geometry {
   const canvas = getCanvasGeometry()
@@ -16,8 +16,8 @@ function getDefaultGeometry(appId: AppId, existingCount: number): Geometry {
 
   if (app.defaultPosition === 'center') {
     return {
-      x: Math.floor((canvas.width - width) / 2),
-      y: Math.max(Math.floor((canvas.height - height) / 2), 0),
+      x: canvas.x + Math.floor((canvas.width - width) / 2),
+      y: Math.max(canvas.y + Math.floor((canvas.height - height) / 2), canvas.y),
       width,
       height,
     }
@@ -25,8 +25,8 @@ function getDefaultGeometry(appId: AppId, existingCount: number): Geometry {
 
   const offset = existingCount * 24
   return {
-    x: Math.min(56 + offset, Math.max(canvas.width - width - 16, 0)),
-    y: Math.min(48 + offset, Math.max(canvas.height - height - 16, 0)),
+    x: Math.min(canvas.x + 56 + offset, Math.max(canvas.x + canvas.width - width - 16, canvas.x)),
+    y: Math.min(canvas.y + 48 + offset, Math.max(canvas.y + canvas.height - height - 16, canvas.y)),
     width,
     height,
   }
@@ -185,8 +185,22 @@ export const useWindowStore = create<WindowManagerState>()(
           return
         }
 
-        window.x = x
-        window.y = Math.max(y, 0)
+        if (window.mode !== 'normal') {
+          if (window.prevGeometry) {
+            window.width = window.prevGeometry.width
+            window.height = window.prevGeometry.height
+          }
+          window.mode = 'normal'
+          window.prevGeometry = null
+        }
+
+        const canvas = getCanvasGeometry()
+        const minX = canvas.x - window.width + 120
+        const maxX = canvas.x + canvas.width - 120
+        const maxY = Math.max(canvas.y, canvas.y + canvas.height - 32)
+
+        window.x = Math.min(Math.max(x, minX), maxX)
+        window.y = Math.min(Math.max(y, canvas.y), maxY)
       })
     },
 
@@ -197,55 +211,54 @@ export const useWindowStore = create<WindowManagerState>()(
           return
         }
 
-        window.width = Math.max(width, window.minWidth)
-        window.height = Math.max(height, window.minHeight)
+        const canvas = getCanvasGeometry()
+
+        window.width = Math.max(Math.min(width, canvas.width), window.minWidth)
+        window.height = Math.max(Math.min(height, canvas.height), window.minHeight)
 
         if (typeof x === 'number') {
-          window.x = x
+          const maxX = Math.max(canvas.x, canvas.x + canvas.width - window.width)
+          window.x = Math.min(Math.max(x, canvas.x), maxX)
         }
         if (typeof y === 'number') {
-          window.y = Math.max(y, 0)
+          const maxY = Math.max(canvas.y, canvas.y + canvas.height - 32)
+          window.y = Math.min(Math.max(y, canvas.y), maxY)
         }
       })
     },
 
-    tileWindow: (id, zone) => {
+    tileWindow: (id, _zone) => {
       set((state) => {
         const window = state.windows[id]
         if (!window) {
           return
         }
 
-        if (window.mode === zone && window.prevGeometry) {
+        if (window.mode !== 'normal' && window.mode !== 'maximized' && window.prevGeometry) {
           window.x = window.prevGeometry.x
           window.y = window.prevGeometry.y
           window.width = window.prevGeometry.width
           window.height = window.prevGeometry.height
-          window.mode = 'normal'
           window.prevGeometry = null
-          return
         }
 
-        if (!window.prevGeometry) {
-          window.prevGeometry = { x: window.x, y: window.y, width: window.width, height: window.height }
+        if (window.mode !== 'minimized') {
+          window.mode = 'normal'
         }
 
-        const target = getTileGeometry(zone)
-        window.x = target.x
-        window.y = target.y
-        window.width = target.width
-        window.height = target.height
-        window.mode = zone
+        state.tilePreviewZone = null
       })
     },
 
-    snapToTile: (id, zone) => {
-      get().tileWindow(id, zone)
+    snapToTile: (_id, _zone) => {
+      set((state) => {
+        state.tilePreviewZone = null
+      })
     },
 
-    setTilePreviewZone: (zone: TileZone | null) => {
+    setTilePreviewZone: (_zone: TileZone | null) => {
       set((state) => {
-        state.tilePreviewZone = zone
+        state.tilePreviewZone = null
       })
     },
   })),

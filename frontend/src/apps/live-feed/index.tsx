@@ -17,7 +17,7 @@ export default function LiveFeedApp() {
     <div className="flex h-full flex-col gap-3 text-sm">
       <div className="flex items-center justify-between rounded-md border border-surface-3 bg-surface-1 px-3 py-2">
         <div className="flex items-center gap-2">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-accent-cyan" />
+          <span className="h-2 w-2 animate-pulse rounded-full bg-accent-amber" />
           <span className="font-display text-text-primary">LIVE</span>
           <button className="rounded border border-surface-3 px-2 py-1" onClick={() => setPaused((prev) => !prev)}>
             {paused ? 'Resume' : 'Pause'}

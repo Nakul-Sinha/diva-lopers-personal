@@ -20,13 +20,13 @@ describe('window store', () => {
     expect(Object.keys(useWindowStore.getState().windows)).toHaveLength(1)
   })
 
-  it('tiles and restores a window', () => {
+  it('maximizes and restores a window', () => {
     const id = useWindowStore.getState().openWindow('jobs')
 
-    useWindowStore.getState().tileWindow(id, 'tiled-left')
-    expect(useWindowStore.getState().windows[id]?.mode).toBe('tiled-left')
+    useWindowStore.getState().maximizeWindow(id)
+    expect(useWindowStore.getState().windows[id]?.mode).toBe('maximized')
 
-    useWindowStore.getState().tileWindow(id, 'tiled-left')
+    useWindowStore.getState().restoreWindow(id)
     expect(useWindowStore.getState().windows[id]?.mode).toBe('normal')
   })
 })

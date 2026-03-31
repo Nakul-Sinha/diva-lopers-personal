@@ -21,7 +21,7 @@ export default function HeatmapApp() {
             <span className="font-mono text-text-primary">{row.id}</span>
             <div className="h-4 rounded bg-surface-2">
               <div
-                className="h-full rounded bg-gradient-to-r from-blue-700 via-accent-blue to-accent-red"
+                className="h-full rounded bg-gradient-to-r from-[#6b4228] via-accent-amber to-accent-red"
                 style={{ width: `${Math.round(row.utilization * 100)}%` }}
               />
             </div>

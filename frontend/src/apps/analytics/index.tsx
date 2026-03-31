@@ -12,11 +12,11 @@ export default function AnalyticsApp() {
         <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={history}>
-              <CartesianGrid stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="label" stroke="#7f90aa" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#7f90aa" tick={{ fontSize: 11 }} />
+              <CartesianGrid stroke="rgba(108, 80, 57, 0.22)" />
+              <XAxis dataKey="label" stroke="#8f6d50" tick={{ fontSize: 11 }} />
+              <YAxis stroke="#8f6d50" tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Area type="monotone" dataKey="jobsPerSecond" stroke="#53e2df" fill="#53e2df44" />
+              <Area type="monotone" dataKey="jobsPerSecond" stroke="#8b5e3c" fill="#8b5e3c44" />
             </AreaChart>
           </ResponsiveContainer>
         </div>

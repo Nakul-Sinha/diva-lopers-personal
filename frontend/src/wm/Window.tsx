@@ -1,9 +1,8 @@
 import { motion, useDragControls, type PanInfo } from 'framer-motion'
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 
 import { appRegistry } from '@/apps/registry'
 import type { WindowInstance } from '@/types/window'
-import { resolveSnapZone } from '@/wm/useWindowDrag'
 import { useWindowResize } from '@/wm/useWindowResize'
 import { ResizeHandles } from '@/wm/ResizeHandles'
 import { TitleBar } from '@/wm/TitleBar'
@@ -15,8 +14,6 @@ type WindowProps = {
   onMinimize: () => void
   onMaximizeRestore: () => void
   onMove: (x: number, y: number) => void
-  onSnap: (zone: import('@/types/app').TileZone) => void
-  onPreview: (zone: import('@/types/app').TileZone | null) => void
   onResize: (width: number, height: number, x?: number, y?: number) => void
 }
 
@@ -27,33 +24,28 @@ export function Window({
   onMinimize,
   onMaximizeRestore,
   onMove,
-  onSnap,
-  onPreview,
   onResize,
 }: WindowProps) {
   const app = appRegistry[window.appId]
   const { startResize } = useWindowResize(window, onResize)
   const dragControls = useDragControls()
+  const dragOriginRef = useRef<{ x: number; y: number } | null>(null)
 
   function handleDragStart(event: React.PointerEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement
     if (target.closest('button')) {
       return
     }
+
+    dragOriginRef.current = { x: window.x, y: window.y }
     dragControls.start(event)
   }
 
-  function handleDrag(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
-    onMove(window.x + info.offset.x, window.y + info.offset.y)
-    onPreview(resolveSnapZone(info, window.mode))
-  }
-
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
-    const zone = resolveSnapZone(info, window.mode)
-    onPreview(null)
-    if (zone) {
-      onSnap(zone)
-    }
+    const origin = dragOriginRef.current ?? { x: window.x, y: window.y }
+    dragOriginRef.current = null
+
+    onMove(origin.x + info.offset.x, origin.y + info.offset.y)
   }
 
   return (
@@ -66,10 +58,10 @@ export function Window({
       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
       drag
       dragControls={dragControls}
+      dragElastic={0}
       dragMomentum={false}
       dragListener={false}
       onPointerDown={onFocus}
-      onDrag={handleDrag}
       onDragEnd={handleDragEnd}
       style={{
         left: window.x,
@@ -78,7 +70,7 @@ export function Window({
         height: window.height,
         zIndex: 20 + window.zIndex,
       }}
-      className="absolute overflow-hidden rounded-xl border border-surface-3 bg-surface-0 text-text-primary shadow-glass"
+      className="pointer-events-auto absolute overflow-hidden rounded-[4px] border border-[#8f6d50] bg-surface-0 text-text-primary shadow-glass"
     >
       <div className="h-full w-full">
         <TitleBar
@@ -89,7 +81,7 @@ export function Window({
           onDragStart={handleDragStart}
         />
 
-        <div className="h-[calc(100%-2rem)] overflow-auto p-4">
+        <div className="h-[calc(100%-2rem)] overflow-auto bg-surface-0 p-4">
           <Suspense fallback={<div className="animate-pulse text-text-secondary">Loading app...</div>}>
             <app.component />
           </Suspense>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { Activity, Command } from 'lucide-react'
 
-import { Dock } from '@/dock/Dock'
+import { DesktopIcons } from '@/desktop/DesktopIcons'
+import { Taskbar } from '@/desktop/Taskbar'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useWindowManager } from '@/wm/useWindowManager'
 import { WindowManager } from '@/wm/WindowManager'
@@ -98,22 +98,10 @@ export function Desktop() {
   return (
     <div className="desktop-atmosphere relative h-dvh w-full overflow-hidden font-body text-text-primary">
       <div className="desktop-grid absolute inset-0 opacity-40" />
-      <div className="pointer-events-none absolute -left-24 -top-20 h-72 w-72 rounded-full bg-accent-blue/20 blur-3xl" />
-      <div className="pointer-events-none absolute -right-20 top-12 h-80 w-80 rounded-full bg-accent-cyan/20 blur-3xl" />
-
-      <header className="absolute inset-x-0 top-0 z-30 flex h-10 items-center justify-between border-b border-surface-3 bg-chrome px-4 text-xs backdrop-blur-xl">
-        <div className="flex items-center gap-2 text-text-secondary">
-          <Command className="h-3.5 w-3.5" />
-          <span className="font-display tracking-wide text-text-primary">INFINITY NODE DESKTOP</span>
-        </div>
-        <div className="flex items-center gap-2 text-text-secondary">
-          <Activity className="h-3.5 w-3.5 text-accent-cyan" />
-          <span>Runtime Overlay v2.0</span>
-        </div>
-      </header>
+      <DesktopIcons />
 
       <WindowManager />
-      <Dock />
+      <Taskbar />
     </div>
   )
 }

@@ -33,7 +33,7 @@ export function DockIcon({ app, running, onOpen }: DockIconProps) {
       >
         <Icon className="h-5 w-5" />
       </div>
-      {running ? <span className="mx-auto mt-1 block h-1 w-1 rounded-full bg-accent-cyan" /> : <span className="mt-1 block h-1 w-1" />}
+      {running ? <span className="mx-auto mt-1 block h-1 w-1 rounded-full bg-accent-walnut" /> : <span className="mt-1 block h-1 w-1" />}
     </button>
   )
 }

@@ -35,7 +35,7 @@ export default function UploadApp() {
             <option value="rust">Rust</option>
             <option value="go">Go</option>
           </select>
-          <button type="submit" className="rounded bg-accent-cyan px-4 py-2 font-semibold text-slate-950">
+          <button type="submit" className="rounded bg-accent-amber px-4 py-2 font-semibold text-[#2f1e12]">
             Queue Upload
           </button>
         </div>

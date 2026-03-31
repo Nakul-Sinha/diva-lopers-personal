@@ -40,7 +40,7 @@ export default function ClusterApp() {
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded bg-surface-2">
                   <div
-                    className="h-full bg-accent-cyan"
+                    className="h-full bg-accent-amber"
                     style={{ width: `${Math.round((node.activeSlots / Math.max(node.totalSlots, 1)) * 100)}%` }}
                   />
                 </div>

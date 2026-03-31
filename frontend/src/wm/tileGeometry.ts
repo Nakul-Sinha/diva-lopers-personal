@@ -1,47 +1,53 @@
 import type { Geometry, TileZone } from '@/types/app'
 
 export function getCanvasGeometry(): Geometry {
-  const dockHeight = 64
+  const topInset = 0
+  const taskbarHeight = 48
   const width = window.innerWidth
-  const height = Math.max(window.innerHeight - dockHeight, 0)
-  return { x: 0, y: 0, width, height }
+  const height = Math.max(window.innerHeight - topInset - taskbarHeight, 0)
+  return { x: 0, y: topInset, width, height }
 }
 
 export function getTileGeometry(zone: TileZone, canvas = getCanvasGeometry()): Geometry {
-  const { width, height } = canvas
+  const { x, y, width, height } = canvas
   const halfW = Math.floor(width / 2)
   const halfH = Math.floor(height / 2)
 
   switch (zone) {
     case 'tiled-left':
-      return { x: 0, y: 0, width: halfW, height }
+      return { x, y, width: halfW, height }
     case 'tiled-right':
-      return { x: halfW, y: 0, width: width - halfW, height }
+      return { x: x + halfW, y, width: width - halfW, height }
     case 'tiled-top':
-      return { x: 0, y: 0, width, height: halfH }
+      return { x, y, width, height: halfH }
     case 'tiled-bottom':
-      return { x: 0, y: halfH, width, height: height - halfH }
+      return { x, y: y + halfH, width, height: height - halfH }
     case 'tiled-tl':
-      return { x: 0, y: 0, width: halfW, height: halfH }
+      return { x, y, width: halfW, height: halfH }
     case 'tiled-tr':
-      return { x: halfW, y: 0, width: width - halfW, height: halfH }
+      return { x: x + halfW, y, width: width - halfW, height: halfH }
     case 'tiled-bl':
-      return { x: 0, y: halfH, width: halfW, height: height - halfH }
+      return { x, y: y + halfH, width: halfW, height: height - halfH }
     case 'tiled-br':
-      return { x: halfW, y: halfH, width: width - halfW, height: height - halfH }
+      return { x: x + halfW, y: y + halfH, width: width - halfW, height: height - halfH }
   }
 }
 
 export function detectTileZone(
   x: number,
   y: number,
-  threshold = 20,
+  threshold = 22,
   canvas = getCanvasGeometry(),
 ): TileZone | null {
-  const atLeft = x <= threshold
-  const atRight = x >= canvas.width - threshold
-  const atTop = y <= threshold
-  const atBottom = y >= canvas.height - threshold
+  const minX = canvas.x
+  const maxX = canvas.x + canvas.width
+  const minY = canvas.y
+  const maxY = canvas.y + canvas.height
+
+  const atLeft = x <= minX + threshold
+  const atRight = x >= maxX - threshold
+  const atTop = y <= minY + threshold
+  const atBottom = y >= maxY - threshold
 
   if (atTop && atLeft) return 'tiled-tl'
   if (atTop && atRight) return 'tiled-tr'

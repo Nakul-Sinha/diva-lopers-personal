@@ -17,7 +17,7 @@ export function TilePreview({ zone }: TilePreviewProps) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.08 }}
-          className="pointer-events-none absolute z-10 rounded-lg border-2 border-dashed border-accent-blue/50 bg-accent-blue/10"
+          className="pointer-events-none absolute z-10 rounded-lg border-2 border-dashed border-accent-clay/50 bg-accent-clay/10"
           style={getTileGeometry(zone)}
         />
       ) : null}
