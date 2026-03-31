@@ -1,214 +1,137 @@
 # Infinity Node
 
-A serverless function execution platform built with Elixir/OTP. Infinity Node provides a Phoenix-based REST API for registering functions, invoking them inside isolated Firecracker microVMs, and observing execution through a real-time metrics pipeline.
+[![Elixir Version](https://img.shields.io/badge/Elixir-1.16+-4B275F?style=for-the-badge&logo=elixir)](https://elixir-lang.org/)
+[![AWS SQS](https://img.shields.io/badge/AWS_SQS-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/sqs/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-## Architecture
+A resilient serverless execution engine built with Elixir/OTP scheduling and Firecracker microVM isolation.
 
+Infinity Node is designed to run untrusted workloads safely at scale. Scheduling, retries, and crash recovery are handled by OTP supervision trees, while each execution happens in a microVM boundary.
+
+## Table of Contents
+- [Architecture Philosophy](#architecture-philosophy)
+- [Key Features](#key-features)
+- [System Architecture](#system-architecture)
+- [Repository Layout](#repository-layout)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [Validation on Metal](#validation-on-metal)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Architecture Philosophy
+
+At the core of Infinity Node is the Elixir BEAM process model. Serverless scheduling is treated as a distributed concurrency problem, and failures are recovered structurally through supervisors instead of ad hoc recovery logic.
+
+## Key Features
+
+- Strict execution isolation with Firecracker microVMs.
+- Snapshot-based execution model to reduce cold start overhead.
+- OTP-native worker orchestration and restart semantics.
+- S3-backed log capture for stdout and stderr artifacts.
+- Security controls through cgroups, private network namespaces, and seccomp modes.
+
+## System Architecture
+
+1. Ingress: jobs are accepted and queued.
+2. Coordination: scheduler components select an available worker slot.
+3. Execution: worker restores runtime state, injects artifact and payload, executes, and collects output.
+4. Egress: result envelope and log pointers are returned to the caller.
+
+```mermaid
+graph TB
+    A[Developer] -->|POST /invoke| B[Phoenix API Layer]
+
+    B -->|Validate Request| C[DynamoDB - Jobs Table]
+    B -->|Enqueue Job| D[SQS Queue]
+
+    D --> E[SQSConsumer GenServer]
+    E --> F[DispatchCoordinator]
+
+    F -->|Select Least Loaded Node| G[Worker Node]
+
+    subgraph Worker_Node
+        G --> H[WorkerPoolSupervisor]
+        H --> I1[WorkerProcess Slot 1]
+        H --> I2[WorkerProcess Slot 2]
+        H --> I3[WorkerProcess Slot N]
+    end
+
+    I1 -->|Restore Snapshot| J[Firecracker MicroVM]
+    I2 -->|Restore Snapshot| J
+    I3 -->|Restore Snapshot| J
+
+    J -->|Receive Artifact + Payload via Vsock| K[Execute Function]
+    K --> L[Stdout / Stderr / Exit Code]
+
+    L --> M[WorkerProcess Post-Execution]
+    M -->|Upload Logs| N[S3 Logs Bucket]
+    M -->|Emit Metrics| O[OpenTelemetry]
+    M -->|Reset VM Snapshot| P[VM Ready State]
+    M -->|Update State| C
+
+    C -->|State TERMINAL| Q[Phoenix API]
+    Q --> R[Return Result to Developer]
 ```
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│   API App    │────▶│  Scheduler   │────▶│   Worker     │
-│  (Phoenix)   │     │  (Elixir)    │     │ (Firecracker)│
-│  Port 4000   │     │  SQS + DDB   │     │  microVMs    │
-└─────┬───────┘     └──────────────┘     └──────┬───────┘
-      │                                          │
-      │  ┌──────────────────────────────────────┘
-      │  │  Telemetry: [:worker, :execution, :complete]
-      ▼  ▼
-┌─────────────────────────────────────────────────────┐
-│              Observability Pipeline                  │
-│  TelemetryHandler → OtelExporter → CloudWatch Logs   │
-│  MetricsReporter  → CloudWatch Metrics (10s push)    │
-│  LiveDashboard    → /dashboard (5 custom pages)      │
-└─────────────────────────────────────────────────────┘
+
+## Repository Layout
+
+```text
+apps/
+    api/
+    scheduler/
+    worker/
+rust/
+    jailer/
+scripts/
+config/
 ```
-
-### Team Ownership
-
-| Person | Responsibility | App |
-|--------|---------------|-----|
-| Person 1 | Worker — Firecracker VM management, execution, snapshots | `apps/worker` |
-| Person 2 | Scheduler — Job queue, state machine, DynamoDB, SQS consumer | `apps/scheduler` |
-| Person 3 | API — Phoenix REST, Observability, Infrastructure (Terraform) | `apps/api` + `infra/` |
 
 ## Prerequisites
 
-- **Elixir** 1.16+ / **Erlang** 26+ (see `.tool-versions`)
-- **Terraform** >= 1.5 (for infrastructure)
-- **AWS CLI** configured with credentials (for AWS services)
+- Elixir 1.16+
+- Erlang/OTP 26+
+- Rust toolchain
+- Firecracker and KVM-capable Linux host for runtime validation
+- AWS credentials with access to required buckets and queue infrastructure
 
-## Quick Start
+## Getting Started
+
+1. Clone and switch to development branch.
 
 ```bash
-# 1. Install Elixir dependencies
+git clone https://github.com/Krishang-Zinzuwadia/diva-lopers.git
+cd diva-lopers
+git checkout dev
+```
+
+2. Install dependencies and run tests.
+
+```bash
 mix deps.get
-
-# 2. Start the API server (dev mode)
-mix phx.server
-# or
-iex -S mix phx.server
-
-# 3. Server runs at http://localhost:4000
+mix test apps/worker/test
 ```
 
-## API Endpoints
+3. For Linux metal-host bootstrap and validation, use scripts in `scripts/`.
 
-### Health
+## Validation on Metal
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/health` | None | Health check (used by ALB) |
-
-### Functions
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/v1/functions` | API Key | Register a new function |
-| `POST` | `/v1/functions/:id/upload-url` | API Key | Get presigned S3 upload URL |
-| `POST` | `/v1/functions/:id/rotate-webhook-token` | API Key | Rotate webhook token |
-
-### Invocations
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/v1/functions/:id/invoke` | API Key | Synchronous invocation (polls for result) |
-| `POST` | `/v1/functions/:id/invoke/async` | API Key | Asynchronous invocation (returns immediately) |
-
-### Jobs
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/v1/jobs/:job_id` | API Key | Get job result / status |
-
-### Webhooks
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/v1/webhooks/:function_id/:token` | Token | Webhook-triggered invocation |
-
-### Dashboard
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/dashboard` | API Key | Phoenix LiveDashboard with 5 custom pages |
-
-## Authentication
-
-All API endpoints (except `/health` and webhooks) require the `x-api-key` header:
+Run these on Ubuntu bare-metal EC2 (i3.metal or c5.metal):
 
 ```bash
-curl -H "x-api-key: your-api-key" http://localhost:4000/v1/functions
+./scripts/bootstrap_ubuntu_worker.sh
+./scripts/create_snapshot.sh
+./scripts/validate_isolation.sh
+./scripts/run_snapshot_fidelity.sh
+./scripts/phase5_validate.sh
 ```
 
-Set the API key via the `INFINITY_NODE_API_KEY` environment variable.
+## Contributing
 
-## Configuration
+1. Create changes on `dev`.
+2. Keep commits atomic and use conventional prefixes such as `feat`, `fix`, and `chore`.
+3. Run relevant tests before pushing.
 
-### Environment Variables
+## License
 
-See [`.env.example`](.env.example) for all available variables. Key ones:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `API_PORT` | `4000` | Phoenix HTTP port |
-| `INFINITY_NODE_API_KEY` | (required) | Static API key for auth |
-| `AWS_REGION` | `us-east-1` | AWS region |
-| `SQS_QUEUE_URL` | — | SQS main job queue URL |
-| `SQS_DLQ_URL` | — | SQS dead-letter queue URL |
-| `ARTIFACTS_BUCKET` | — | S3 bucket for function artifacts |
-| `LOGS_BUCKET` | — | S3 bucket for execution logs |
-| `DYNAMODB_JOBS_TABLE` | `infinity-node-jobs-v1` | DynamoDB jobs table |
-| `OTEL_ENDPOINT` | — | OpenTelemetry collector (optional) |
-
-### Config Files
-
-| File | Purpose |
-|------|---------|
-| `config/config.exs` | Shared defaults for all environments |
-| `config/dev.exs` | Development overrides (debug logging, noop adapters) |
-| `config/prod.exs` | Production overrides (info logging, jailer enabled) |
-| `config/test.exs` | Test overrides (port 4002, server off) |
-| `config/runtime.exs` | Runtime env var reads (all sensitive config) |
-
-## Infrastructure (Terraform)
-
-All AWS infrastructure is defined in `infra/terraform/`:
-
-```bash
-cd infra/terraform
-
-# Preview changes
-terraform init
-terraform plan
-
-# Provision resources
-terraform apply
-
-# Tear down
-terraform destroy
-```
-
-### Resources Created
-
-- **S3**: `infinity-node-artifacts` (versioned), `infinity-node-logs` (30-day expiry)
-- **SQS**: Main job queue + DLQ (redrive at 3 failures)
-- **SNS**: `infinity-node-alerts` topic with email subscription
-- **IAM**: Task execution role + task role (SQS, DynamoDB, S3, CloudWatch)
-- **ECS**: Cluster + API (Fargate) + Worker (EC2) task definitions
-- **CloudWatch**: 3 log groups (14-day retention) + 4 alarms
-
-### Not Yet Provisioned
-
-- **ALB**: Requires VPC ID and subnet IDs (set in `variables.tf`)
-- **Capacity Provider**: i3.metal instance type for Worker nodes
-
-## LiveDashboard
-
-Access at `http://localhost:4000/dashboard` (requires API key authentication).
-
-### Custom Pages
-
-| Page | What It Shows |
-|------|--------------|
-| **Cluster Overview** | Active workers, available slots, jobs/sec, uptime |
-| **Queue State** | Main queue depth, DLQ depth, processing rate, drain time estimate |
-| **Latency** | P50/P95/P99 execution latency with status indicators |
-| **Job Explorer** | Last 100 jobs — sortable table with state, function, retries |
-| **Failure Log** | Failed jobs with reason, category, retry count |
-
-## Testing
-
-```bash
-# Run all tests
-mix test
-
-# Run API tests only
-mix test apps/api/test
-```
-
-## Project Structure
-
-```
-├── apps/
-│   ├── api/           # Person 3 — Phoenix API + Observability
-│   │   ├── lib/
-│   │   │   ├── api/
-│   │   │   │   ├── controllers/    # Function, Invocation, Job, Health, Webhook
-│   │   │   │   ├── plugs/          # AuthPlug, RateLimitPlug
-│   │   │   │   ├── helpers/        # Response helpers
-│   │   │   │   ├── live_dashboard/ # 5 custom dashboard pages
-│   │   │   │   ├── endpoint.ex
-│   │   │   │   ├── router.ex
-│   │   │   │   └── telemetry.ex
-│   │   │   ├── infinity_node/      # Shared schema (JobEnvelope, ResultEnvelope)
-│   │   │   └── observability/      # TelemetryHandler, OtelExporter, MetricsReporter
-│   │   └── test/
-│   ├── scheduler/     # Person 2 — Job queue management
-│   └── worker/        # Person 1 — Firecracker VM execution
-├── config/            # Environment configs (dev, prod, test, runtime)
-├── infra/
-│   ├── dynamodb/      # DynamoDB schema + provisioning (Person 2)
-│   └── terraform/     # Full IaC: S3, SQS, SNS, IAM, ECS, CloudWatch
-├── rust/              # Rust components (Person 1)
-├── scripts/           # Utility scripts
-└── mix.exs            # Umbrella root
-```
+MIT
